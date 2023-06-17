@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:flutter/src/widgets/placeholder.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import 'ChatMessage.dart';
 
@@ -14,6 +16,20 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  late stt.SpeechToText _speech;
+  bool isListening = false;
+  String _lastwords = '';
+
+  @override
+  void initState() {
+    super.initState();
+
+    debugLogging:
+    true;
+
+    _speech = stt.SpeechToText();
+  }
+
   final List<ChatMessage> _messages = [];
   final TextEditingController _controller = TextEditingController();
 
@@ -30,6 +46,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages.insert(0, message);
       });
 
+      _lastwords = '';
+      isListening = false;
       _controller.clear();
     }
   }
@@ -37,7 +55,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     var size = MediaQuery.of(context).size;
-    print(size.height * 0.01);
+
     return Scaffold(
       backgroundColor: Color(0xFF2A2B30),
       appBar: AppBar(
@@ -57,7 +75,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Flexible(
             // child: Container(height: size.height),
             child: Padding(
-              padding: EdgeInsets.all(16.0),
+              padding: EdgeInsets.only(top: 5.0),
               child: ListView.builder(
                 reverse: true,
                 itemCount: _messages.length,
@@ -74,13 +92,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     showCursor: _controller.text.isNotEmpty ? true : false,
-                    enableInteractiveSelection: false,
                     controller: _controller,
                     decoration: InputDecoration(
                         hintText: "Type a message...",
                         hintStyle: TextStyle(color: Color(0xFF797E8B)),
                         border: InputBorder.none),
                   ),
+                ),
+                IconButton(
+                  icon: Icon(isListening ? Icons.mic : Icons.mic_none),
+                  onPressed: () {
+                    _listen();
+                    // isListening = false;
+                  },
                 ),
                 IconButton(
                   icon: Icon(Icons.send),
@@ -94,5 +118,41 @@ class _ChatScreenState extends State<ChatScreen> {
         ]),
       ),
     );
+  }
+
+  void _listen() async {
+    if (!isListening) {
+      bool available = await _speech.initialize(
+        debugLogging: true,
+        onStatus: (val) => print('onStatus: $val'),
+        onError: (val) => print('onError: $val'),
+      );
+      if (available) {
+        setState(() {
+          isListening = true;
+          try {
+            _speech.listen(
+              onResult: (val) => setState(() {
+                _lastwords = val.recognizedWords;
+                _controller.text = '$_lastwords';
+              }),
+              onDevice: false,
+            );
+          } catch (e) {
+            print(e.toString());
+          }
+        });
+      } else {
+        setState(() {
+          print("Inside else");
+          isListening = false;
+          _speech.stop();
+        });
+      }
+    } else {
+      setState(() {
+        isListening = false;
+      });
+    }
   }
 }
